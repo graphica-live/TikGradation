@@ -25,6 +25,26 @@ const upload = multer({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ─── レート制限 (1時間に2本) ───────────────────────────────────────────────
+const rateLimitMap = new Map(); // ip -> [timestamp, ...]
+const RATE_LIMIT_MAX = 2;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1時間
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const timestamps = (rateLimitMap.get(ip) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    const retryAt = new Date(timestamps[0] + RATE_LIMIT_WINDOW_MS);
+    const hh = retryAt.getHours().toString().padStart(2, '0');
+    const mm = retryAt.getMinutes().toString().padStart(2, '0');
+    return { limited: true, retryTime: `${hh}時${mm}分` };
+  }
+  timestamps.push(now);
+  rateLimitMap.set(ip, timestamps);
+  return { limited: false };
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 function getVideoInfo(inputPath) {
   return new Promise((resolve, reject) => {
     const ffprobe = spawn('ffprobe', [
@@ -64,6 +84,15 @@ app.post('/convert', upload.single('video'), async (req, res) => {
   }
 
   const inputPath = req.file.path;
+
+  // レート制限チェック
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const rl = checkRateLimit(ip);
+  if (rl.limited) {
+    fs.unlink(inputPath, () => {});
+    return res.status(429).json({ error: `処理制限に達しました。${rl.retryTime}以降に再実行してください。` });
+  }
+
   const outputName = `${uuidv4()}.webm`;
   const outputPath = path.join(TEMP_DIR, outputName);
 
@@ -74,6 +103,12 @@ app.post('/convert', upload.single('video'), async (req, res) => {
 
   try {
     const { duration, hasAudio } = await getVideoInfo(inputPath);
+
+    // 30秒制限チェック
+    if (duration > 30) {
+      fs.unlink(inputPath, () => {});
+      return res.status(400).json({ error: '30秒以上の動画はアップロードできません。' });
+    }
 
     // Gradient alpha: transparent at Y=0, opaque at Y=H*ratio
     const alphaExpr = ratio === 0

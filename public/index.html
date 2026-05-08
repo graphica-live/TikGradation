@@ -156,8 +156,6 @@
       </div>
     </div>
 
-    <div class="bitrate-note">出力: VP9 CRF30（可変ビットレート・品質固定） / 音声: Opus 128kbps（フェードイン/アウト含む） / フレームレート・音声はそのまま維持</div>
-
     <hr>
 
     <button type="submit" id="submitBtn" disabled>変換する</button>
@@ -196,9 +194,28 @@
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
 
     function setFile(f) {
-      selectedFile = f;
-      fileName.textContent = f.name;
-      submitBtn.disabled = false;
+      // 30秒チェック（クライアント側プリチェック）
+      const tempUrl = URL.createObjectURL(f);
+      const tempVid = document.createElement('video');
+      tempVid.preload = 'metadata';
+      tempVid.src = tempUrl;
+      tempVid.onloadedmetadata = () => {
+        URL.revokeObjectURL(tempUrl);
+        if (tempVid.duration > 30) {
+          status.textContent = '30秒以上の動画はアップロードできません。';
+          status.className = 'status error';
+          selectedFile = null;
+          fileName.textContent = '';
+          submitBtn.disabled = true;
+          fileInput.value = '';
+        } else {
+          selectedFile = f;
+          fileName.textContent = f.name;
+          status.textContent = '';
+          status.className = 'status';
+          submitBtn.disabled = false;
+        }
+      };
     }
 
     topPercent.addEventListener('input', () => { document.getElementById('topVal').textContent      = topPercent.value + '%'; });
