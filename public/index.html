@@ -115,6 +115,74 @@
     video { display: block; width: 100%; max-height: 300px; object-fit: contain; }
 
     hr { border: none; border-top: 1px solid #2a2a3a; margin: 20px 0; }
+
+    .promo {
+      margin-top: 24px;
+      width: 100%;
+      max-width: 560px;
+    }
+    .promo a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: linear-gradient(135deg, #1a0a2e 0%, #0a1a2e 100%);
+      border: 1px solid transparent;
+      background-clip: padding-box;
+      border-radius: 14px;
+      padding: 20px 24px;
+      text-decoration: none;
+      color: #e0e0e0;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s;
+    }
+    .promo a::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      padding: 1px;
+      background: linear-gradient(135deg, #fe2c55, #25f4ee);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .promo a:hover { transform: translateY(-2px); }
+    .promo .promo-left { display: flex; align-items: center; gap: 14px; }
+    .promo .promo-icon {
+      font-size: 1.8rem;
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #fe2c55 0%, #25f4ee 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .promo .promo-text { display: flex; flex-direction: column; gap: 3px; }
+    .promo .promo-title { font-weight: 700; font-size: 0.95rem; }
+    .promo .promo-sub { font-size: 0.78rem; color: #888; }
+    .promo .promo-arrow {
+      font-size: 1.1rem;
+      background: linear-gradient(135deg, #fe2c55, #25f4ee);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      flex-shrink: 0;
+    }
+    .promo-sister a::before {
+      background: linear-gradient(135deg, #a78bfa, #38bdf8);
+    }
+    .promo-sister .promo-icon {
+      background: linear-gradient(135deg, #a78bfa 0%, #38bdf8 100%);
+    }
+    .promo-sister .promo-arrow {
+      background: linear-gradient(135deg, #a78bfa, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
   </style>
 </head>
 <body>
@@ -166,6 +234,32 @@
     <div class="preview-wrap" id="previewWrap">
       <video id="preview" controls loop autoplay muted></video>
     </div>
+  </div>
+
+  <div class="promo">
+    <a href="https://www.tiktok.com/@yu_ki_nojo" target="_blank" rel="noopener noreferrer">
+      <div class="promo-left">
+        <div class="promo-icon">💻</div>
+        <div class="promo-text">
+          <span class="promo-title">PC配信環境の相談、コンサルティングはこちら</span>
+          <span class="promo-sub">@yu_ki_nojo のTikTokをチェック</span>
+        </div>
+      </div>
+      <div class="promo-arrow">→</div>
+    </a>
+  </div>
+
+  <div class="promo promo-sister">
+    <a href="https://tikring.graphica-produce.com/" target="_blank" rel="noopener noreferrer">
+      <div class="promo-left">
+        <div class="promo-icon">🔗</div>
+        <div class="promo-text">
+          <span class="promo-title">TikRing - アイコンフレーム装着支援</span>
+          <span class="promo-sub">姉妹サイト</span>
+        </div>
+      </div>
+      <div class="promo-arrow">→</div>
+    </a>
   </div>
 
   <script>
