@@ -106,10 +106,8 @@ app.post('/convert', upload.single('video'), async (req, res) => {
     ffmpegArgs.push(
       '-c:v', 'libvpx-vp9',
       '-auto-alt-ref', '0', // required for VP9 alpha
-      '-b:v', '7000k',
-      '-minrate', '7000k',
-      '-maxrate', '7000k',
-      '-bufsize', '14000k',
+      '-b:v', '0',
+      '-crf', '30',
       '-y',
       outputPath,
     );
