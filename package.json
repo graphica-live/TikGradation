@@ -1,0 +1,15 @@
+{
+  "name": "tikgradation",
+  "version": "1.0.0",
+  "description": "MP4 top-transparency to WebM converter",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.1.1",
+    "uuid": "^11.1.1"
+  }
+}
