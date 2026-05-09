@@ -18,10 +18,12 @@ const upload = multer({
   dest: TEMP_DIR,
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'video/mp4' || file.originalname.endsWith('.mp4')) {
+    const name = file.originalname.toLowerCase();
+    const allowed = ['video/mp4', 'video/quicktime'];
+    if (allowed.includes(file.mimetype) || name.endsWith('.mp4') || name.endsWith('.mov')) {
       cb(null, true);
     } else {
-      cb(new Error('MP4ファイルのみ対応しています'));
+      cb(new Error('MP4またはMOVファイルのみ対応しています'));
     }
   },
 });
@@ -189,48 +191,53 @@ async function processConversion(jobId, inputPath, options) {
     job.phase = '変換中';
     job.progress = 10;
 
-    const ffmpeg = spawn(ffmpegPath, ffmpegArgs);
-    let stderr = '';
+    await new Promise((resolve) => {
+      const ffmpeg = spawn(ffmpegPath, ffmpegArgs);
+      let stderr = '';
 
-    ffmpeg.stderr.on('data', data => {
-      const chunk = data.toString();
-      stderr += chunk;
-      const progress = parseFfmpegProgress(chunk, duration);
-      if (progress !== null) {
-        job.progress = Math.max(job.progress, progress);
-      }
-    });
+      ffmpeg.stderr.on('data', data => {
+        const chunk = data.toString();
+        stderr += chunk;
+        const progress = parseFfmpegProgress(chunk, duration);
+        if (progress !== null) {
+          job.progress = Math.max(job.progress, progress);
+        }
+      });
 
-    ffmpeg.on('close', code => {
-      fs.unlink(inputPath, () => {});
+      ffmpeg.on('close', code => {
+        fs.unlink(inputPath, () => {});
 
-      if (code !== 0) {
+        if (code !== 0) {
+          fs.unlink(outputPath, () => {});
+          console.error('[ffmpeg error]', stderr);
+          job.status = 'failed';
+          job.phase = '失敗';
+          job.progress = 0;
+          job.error = 'FFmpeg処理に失敗しました';
+          scheduleJobCleanup(jobId);
+          resolve();
+          return;
+        }
+
+        job.status = 'completed';
+        job.phase = '完了';
+        job.progress = 100;
+        job.outputPath = outputPath;
+        scheduleJobCleanup(jobId);
+        resolve();
+      });
+
+      ffmpeg.on('error', err => {
+        fs.unlink(inputPath, () => {});
         fs.unlink(outputPath, () => {});
-        console.error('[ffmpeg error]', stderr);
+        console.error('[ffmpeg spawn error]', err);
         job.status = 'failed';
         job.phase = '失敗';
         job.progress = 0;
-        job.error = 'FFmpeg処理に失敗しました';
+        job.error = 'FFmpegの起動に失敗しました。';
         scheduleJobCleanup(jobId);
-        return;
-      }
-
-      job.status = 'completed';
-      job.phase = '完了';
-      job.progress = 100;
-      job.outputPath = outputPath;
-      scheduleJobCleanup(jobId);
-    });
-
-    ffmpeg.on('error', err => {
-      fs.unlink(inputPath, () => {});
-      fs.unlink(outputPath, () => {});
-      console.error('[ffmpeg spawn error]', err);
-      job.status = 'failed';
-      job.phase = '失敗';
-      job.progress = 0;
-      job.error = 'FFmpegの起動に失敗しました。';
-      scheduleJobCleanup(jobId);
+        resolve();
+      });
     });
   } catch (err) {
     fs.unlink(inputPath, () => {});
@@ -242,6 +249,28 @@ async function processConversion(jobId, inputPath, options) {
     scheduleJobCleanup(jobId);
   }
 }
+
+// ─── 同時実行制限 ────────────────────────────────────────────────────────────
+const MAX_CONCURRENT = 2;
+let activeConversions = 0;
+const conversionQueue = []; // { jobId, inputPath, options }
+
+function enqueueConversion(jobId, inputPath, options) {
+  conversionQueue.push({ jobId, inputPath, options });
+  runNextConversion();
+}
+
+function runNextConversion() {
+  while (activeConversions < MAX_CONCURRENT && conversionQueue.length > 0) {
+    const { jobId, inputPath, options } = conversionQueue.shift();
+    activeConversions++;
+    processConversion(jobId, inputPath, options).finally(() => {
+      activeConversions--;
+      runNextConversion();
+    });
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * POST /convert
@@ -271,7 +300,7 @@ app.post('/convert', upload.single('video'), async (req, res) => {
   const fadeOut = Math.max(0, parseFloat(req.body.fadeOut ?? 0.5));
 
   const jobId = createJob();
-  processConversion(jobId, inputPath, { topPercent, fadeIn, fadeOut });
+  enqueueConversion(jobId, inputPath, { topPercent, fadeIn, fadeOut });
 
   return res.json({ jobId });
 });
