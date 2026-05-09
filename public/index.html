@@ -89,16 +89,20 @@
       border-radius: 8px;
       height: 8px;
       overflow: hidden;
+      position: relative;
     }
     .progress-bar {
       height: 100%;
       background: linear-gradient(90deg, #a78bfa, #38bdf8);
-      animation: indeterminate 1.5s infinite linear;
-      width: 40%;
+      width: 0%;
+      transition: width 0.2s ease;
     }
-    @keyframes indeterminate {
-      0%   { transform: translateX(-100%); }
-      100% { transform: translateX(350%); }
+    .progress-meta {
+      display: none;
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: #a78bfa;
+      text-align: right;
     }
 
     .status { margin-top: 16px; font-size: 0.85rem; color: #888; text-align: center; }
@@ -228,7 +232,8 @@
 
     <button type="submit" id="submitBtn" disabled>変換する</button>
 
-    <div class="progress" id="progress"><div class="progress-bar"></div></div>
+  <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+  <div class="progress-meta" id="progressMeta">0%</div>
     <div class="status" id="status"></div>
 
     <div class="preview-wrap" id="previewWrap">
@@ -271,10 +276,17 @@
     const fadeOut    = document.getElementById('fadeOut');
     const submitBtn  = document.getElementById('submitBtn');
     const progress   = document.getElementById('progress');
+    const progressBar = document.getElementById('progressBar');
+    const progressMeta = document.getElementById('progressMeta');
     const status     = document.getElementById('status');
     const previewWrap = document.getElementById('previewWrap');
     const preview    = document.getElementById('preview');
     let selectedFile = null;
+    let pollTimer = null;
+    let convertedBlob = null;
+    let convertedUrl = null;
+    let convertedFileName = '';
+    let downloadReady = false;
 
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -288,6 +300,8 @@
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
 
     function setFile(f) {
+      resetDownloadState();
+
       // 30秒チェック（クライアント側プリチェック）
       const tempUrl = URL.createObjectURL(f);
       const tempVid = document.createElement('video');
@@ -316,13 +330,185 @@
     fadeIn.addEventListener('input',     () => { document.getElementById('fadeInVal').textContent   = parseFloat(fadeIn.value).toFixed(1) + 's'; });
     fadeOut.addEventListener('input',    () => { document.getElementById('fadeOutVal').textContent  = parseFloat(fadeOut.value).toFixed(1) + 's'; });
 
+    topPercent.addEventListener('change', resetDownloadState);
+    fadeIn.addEventListener('change', resetDownloadState);
+    fadeOut.addEventListener('change', resetDownloadState);
+
+    function setProgress(value) {
+      const safeValue = Math.max(0, Math.min(100, Math.round(value)));
+      progressBar.style.width = safeValue + '%';
+      progressMeta.textContent = safeValue + '%';
+    }
+
+    function showProgress() {
+      progress.style.display = 'block';
+      progressMeta.style.display = 'block';
+    }
+
+    function hideProgress() {
+      progress.style.display = 'none';
+      progressMeta.style.display = 'none';
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function resetDownloadState() {
+      downloadReady = false;
+      convertedBlob = null;
+      convertedFileName = '';
+      submitBtn.textContent = '変換する';
+      previewWrap.style.display = 'none';
+      preview.removeAttribute('src');
+      preview.load();
+
+      if (convertedUrl) {
+        URL.revokeObjectURL(convertedUrl);
+        convertedUrl = null;
+      }
+    }
+
+    async function fetchConvertedBlob(downloadUrl) {
+      const res = await fetch(downloadUrl);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: '変換ファイルの取得に失敗しました。' }));
+        throw new Error(err.error || '変換ファイルの取得に失敗しました。');
+      }
+
+      return res.blob();
+    }
+
+    async function saveConvertedFile() {
+      if (!convertedBlob) return;
+
+      if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: convertedFileName,
+          types: [{
+            description: 'WebM video',
+            accept: { 'video/webm': ['.webm'] },
+          }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(convertedBlob);
+        await writable.close();
+        return { usedSavePicker: true };
+      }
+
+      const a = document.createElement('a');
+      a.href = convertedUrl;
+      a.download = convertedFileName;
+      a.click();
+      return { usedSavePicker: false };
+    }
+
+    function uploadConversion(formData) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/convert');
+        xhr.responseType = 'json';
+
+        xhr.upload.addEventListener('progress', event => {
+          if (!event.lengthComputable) return;
+          const percent = (event.loaded / event.total) * 100;
+          setProgress(percent);
+          status.textContent = `アップロード中... ${Math.round(percent)}%`;
+        });
+
+        xhr.addEventListener('load', () => {
+          const response = xhr.response || {};
+          if (xhr.status >= 200 && xhr.status < 300 && response.jobId) {
+            resolve(response);
+            return;
+          }
+
+          reject(new Error(response.error || 'エラーが発生しました'));
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('通信エラーが発生しました'));
+        });
+
+        xhr.send(formData);
+      });
+    }
+
+    async function pollJob(jobId) {
+      return new Promise((resolve, reject) => {
+        const tick = async () => {
+          try {
+            const res = await fetch(`/jobs/${jobId}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+              throw new Error(data.error || '進捗の取得に失敗しました');
+            }
+
+            setProgress(data.progress || 0);
+            status.textContent = `${data.phase}... ${Math.round(data.progress || 0)}%`;
+            status.className = 'status';
+
+            if (data.status === 'completed') {
+              stopPolling();
+              resolve(data);
+              return;
+            }
+
+            if (data.status === 'failed') {
+              stopPolling();
+              reject(new Error(data.error || '変換に失敗しました'));
+              return;
+            }
+
+            pollTimer = setTimeout(tick, 700);
+          } catch (error) {
+            stopPolling();
+            reject(error);
+          }
+        };
+
+        tick();
+      });
+    }
+
     submitBtn.addEventListener('click', async () => {
       if (!selectedFile) return;
 
+      if (downloadReady) {
+        try {
+          submitBtn.disabled = true;
+          status.textContent = '保存ダイアログを開いています...';
+          status.className = 'status';
+          const result = await saveConvertedFile();
+          status.textContent = result.usedSavePicker
+            ? '保存先を選択してダウンロードしました。'
+            : 'ブラウザの通常ダウンロードを開始しました。';
+          status.className = 'status success';
+        } catch (e) {
+          if (e && e.name === 'AbortError') {
+            status.textContent = '保存をキャンセルしました。';
+            status.className = 'status';
+          } else {
+            status.textContent = e.message;
+            status.className = 'status error';
+          }
+        } finally {
+          submitBtn.disabled = false;
+        }
+        return;
+      }
+
       submitBtn.disabled = true;
-      progress.style.display = 'block';
+      showProgress();
+      setProgress(0);
       previewWrap.style.display = 'none';
-      status.textContent = '変換中...';
+      preview.removeAttribute('src');
+      preview.load();
+      status.textContent = 'アップロードを開始します...';
       status.className = 'status';
 
       const formData = new FormData();
@@ -332,30 +518,32 @@
       formData.append('fadeOut',    fadeOut.value);
 
       try {
-        const res = await fetch('/convert', { method: 'POST', body: formData });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'サーバーエラー' }));
-          throw new Error(err.error || 'エラーが発生しました');
-        }
+        resetDownloadState();
+        const { jobId } = await uploadConversion(formData);
+        setProgress(5);
+        status.textContent = '変換を開始しています...';
 
-        const blob = await res.blob();
-        const url  = URL.createObjectURL(blob);
+        const job = await pollJob(jobId);
+        status.textContent = '変換ファイルを準備しています...';
+        convertedBlob = await fetchConvertedBlob(job.downloadUrl);
+        convertedUrl = URL.createObjectURL(convertedBlob);
+        convertedFileName = `output_${Date.now()}.webm`;
+        downloadReady = true;
+        submitBtn.textContent = 'ダウンロードする';
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `output_${Date.now()}.webm`;
-        a.click();
-
-        preview.src = url;
+        preview.src = convertedUrl;
         previewWrap.style.display = 'block';
+        setProgress(100);
+        hideProgress();
 
-        status.textContent = '変換完了！ダウンロードを開始しました。';
+        status.textContent = '変換完了。ダウンロードボタンから保存してください。';
         status.className = 'status success';
       } catch (e) {
+        hideProgress();
         status.textContent = e.message;
         status.className = 'status error';
       } finally {
-        progress.style.display = 'none';
+        stopPolling();
         submitBtn.disabled = false;
       }
     });
