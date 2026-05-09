@@ -154,14 +154,18 @@ async function processConversion(jobId, inputPath, options) {
       : `if(lt(Y,H*${ratio}),255*Y/(H*${ratio}),255)`;
 
     const vfFilters = [
-      'format=yuva420p',
+      'scale=trunc(iw/2)*2:trunc(ih/2)*2',  // 奇数ピクセル対策
+      'format=yuv420p',                       // HDR/色空間を SDR に正規化
+      'format=yuva420p',                       // アルファチャンネル追加
       `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}'`,
       'format=yuva420p',
     ];
     if (options.fadeIn > 0) vfFilters.push(`fade=t=in:st=0:d=${options.fadeIn}:alpha=1`);
     if (options.fadeOut > 0) vfFilters.push(`fade=t=out:st=${Math.max(0, duration - options.fadeOut).toFixed(3)}:d=${options.fadeOut}:alpha=1`);
 
+    const isMov = options.isMov;
     const ffmpegArgs = [
+      ...(isMov ? ['-ignore_editlist', '1'] : []),
       '-i', inputPath,
       '-vf', vfFilters.join(','),
     ];
@@ -298,9 +302,11 @@ app.post('/convert', upload.single('video'), async (req, res) => {
   const topPercent = Math.min(100, Math.max(0, parseFloat(req.body.topPercent ?? 30)));
   const fadeIn  = Math.max(0, parseFloat(req.body.fadeIn  ?? 0.5));
   const fadeOut = Math.max(0, parseFloat(req.body.fadeOut ?? 0.5));
+  const isMov = req.file.mimetype === 'video/quicktime'
+    || req.file.originalname.toLowerCase().endsWith('.mov');
 
   const jobId = createJob();
-  enqueueConversion(jobId, inputPath, { topPercent, fadeIn, fadeOut });
+  enqueueConversion(jobId, inputPath, { topPercent, fadeIn, fadeOut, isMov });
 
   return res.json({ jobId });
 });
