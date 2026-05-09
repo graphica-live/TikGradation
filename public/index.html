@@ -294,9 +294,11 @@
     const status     = document.getElementById('status');
     const previewWrap = document.getElementById('previewWrap');
     const preview    = document.getElementById('preview');
-    // デスクトップChromeのみプレビューを表示
-    const ua = navigator.userAgent;
-    const isDesktopChrome = /Chrome/.test(ua) && !/Mobile|Android|iPhone|iPad/.test(ua) && !/Edg\/|OPR\//.test(ua);
+    // WebM VP9アルファの再生可否で判定（UA判定より確実）
+    const isDesktopChrome = (() => {
+      const v = document.createElement('video');
+      return v.canPlayType('video/webm; codecs="vp9"') !== '';
+    })();
     let selectedFile = null;
     let pollTimer = null;
     let convertedBlob = null;
