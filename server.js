@@ -155,8 +155,7 @@ async function processConversion(jobId, inputPath, options) {
 
     const vfFilters = [
       'scale=trunc(iw/2)*2:trunc(ih/2)*2',  // 奇数ピクセル対策
-      'format=yuv420p',                       // HDR/色空間を SDR に正規化
-      'format=yuva420p',                       // アルファチャンネル追加
+      'format=yuva420p',                     // あらゆる入力形式をyuva420pへ変換
       `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}'`,
       'format=yuva420p',
     ];
@@ -214,10 +213,12 @@ async function processConversion(jobId, inputPath, options) {
         if (code !== 0) {
           fs.unlink(outputPath, () => {});
           console.error('[ffmpeg error]', stderr);
+          // 最後の200文字からエラー原因を抽出してデバッグに役立てる
+          const hint = stderr.slice(-400).split('\n').filter(l => l.trim()).slice(-3).join(' | ');
           job.status = 'failed';
           job.phase = '失敗';
           job.progress = 0;
-          job.error = 'FFmpeg処理に失敗しました';
+          job.error = `FFmpeg処理に失敗しました: ${hint}`;
           scheduleJobCleanup(jobId);
           resolve();
           return;
