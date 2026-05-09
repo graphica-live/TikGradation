@@ -250,6 +250,7 @@
     <div class="status" id="status"></div>
 
     <div class="preview-wrap" id="previewWrap" style="display:none">
+      <video id="preview" controls loop autoplay muted></video>
     </div>
   </div>
 
@@ -291,6 +292,11 @@
     const progressBar = document.getElementById('progressBar');
     const progressMeta = document.getElementById('progressMeta');
     const status     = document.getElementById('status');
+    const previewWrap = document.getElementById('previewWrap');
+    const preview    = document.getElementById('preview');
+    // デスクトップChromeのみプレビューを表示
+    const ua = navigator.userAgent;
+    const isDesktopChrome = /Chrome/.test(ua) && !/Mobile|Android|iPhone|iPad/.test(ua) && !/Edg\/|OPR\//.test(ua);
     let selectedFile = null;
     let pollTimer = null;
     let convertedBlob = null;
@@ -372,6 +378,9 @@
       convertedBlob = null;
       convertedFileName = '';
       submitBtn.textContent = '変換する';
+      previewWrap.style.display = 'none';
+      preview.removeAttribute('src');
+      preview.load();
 
       if (convertedUrl) {
         URL.revokeObjectURL(convertedUrl);
@@ -513,6 +522,12 @@
         convertedFileName = `output_${Date.now()}.webm`;
         downloadReady = true;
         submitBtn.textContent = 'ダウンロードする';
+
+        if (isDesktopChrome) {
+          convertedUrl = URL.createObjectURL(convertedBlob);
+          preview.src = convertedUrl;
+          previewWrap.style.display = 'block';
+        }
 
         setProgress(100);
         hideProgress();
