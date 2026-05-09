@@ -19,10 +19,11 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const name = file.originalname.toLowerCase();
-    if (file.mimetype === 'video/mp4' || name.endsWith('.mp4')) {
+    const allowed = ['video/mp4', 'video/quicktime'];
+    if (allowed.includes(file.mimetype) || name.endsWith('.mp4') || name.endsWith('.mov')) {
       cb(null, true);
     } else {
-      cb(new Error('MP4ファイルのみ対応しています'));
+      cb(new Error('MP4またはMOVファイルのみ対応しています'));
     }
   },
 });
@@ -161,8 +162,9 @@ async function processConversion(jobId, inputPath, options) {
     if (options.fadeIn > 0) vfFilters.push(`fade=t=in:st=0:d=${options.fadeIn}:alpha=1`);
     if (options.fadeOut > 0) vfFilters.push(`fade=t=out:st=${Math.max(0, duration - options.fadeOut).toFixed(3)}:d=${options.fadeOut}:alpha=1`);
 
-    const isMov = false;
+    const isMov = options.isMov;
     const ffmpegArgs = [
+      ...(isMov ? ['-ignore_editlist', '1'] : []),
       '-i', inputPath,
       '-vf', vfFilters.join(','),
     ];
@@ -302,8 +304,11 @@ app.post('/convert', upload.single('video'), async (req, res) => {
   const fadeIn  = Math.max(0, parseFloat(req.body.fadeIn  ?? 0.5));
   const fadeOut = Math.max(0, parseFloat(req.body.fadeOut ?? 0.5));
 
+    const isMov = req.file.mimetype === 'video/quicktime'
+    || req.file.originalname.toLowerCase().endsWith('.mov');
+
   const jobId = createJob();
-  enqueueConversion(jobId, inputPath, { topPercent, fadeIn, fadeOut });
+  enqueueConversion(jobId, inputPath, { topPercent, fadeIn, fadeOut, isMov });
 
   return res.json({ jobId });
 });
