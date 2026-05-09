@@ -57,6 +57,8 @@ function getVideoInfo(inputPath) {
   return new Promise((resolve, reject) => {
     const ffprobeProcess = spawn(ffprobePath, [
       '-v', 'quiet',
+      '-probesize', '50M',         // iPhone MOV はメタデータが末尾にある場合がある
+      '-analyzeduration', '50M',
       '-print_format', 'json',
       '-show_format',
       '-show_streams',
@@ -155,7 +157,8 @@ async function processConversion(jobId, inputPath, options) {
 
     const vfFilters = [
       'scale=trunc(iw/2)*2:trunc(ih/2)*2',  // 奇数ピクセル対策
-      'format=yuva420p',                     // あらゆる入力形式をyuva420pへ変換
+      'format=yuv420p',                      // 10bit HEVC等を8bitに正規化してから alpha を追加
+      'format=yuva420p',
       `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}'`,
       'format=yuva420p',
     ];
@@ -166,10 +169,12 @@ async function processConversion(jobId, inputPath, options) {
     const ffmpegArgs = [
       ...(isMov ? ['-ignore_editlist', '1'] : []),
       '-i', inputPath,
+      '-map', '0:v:0',           // Cinematic Mode等の複数トラックに対応: 先頭ビデオトラックのみ
       '-vf', vfFilters.join(','),
     ];
 
     if (hasAudio) {
+      ffmpegArgs.push('-map', '0:a:0?');  // 先頭オーディオトラック（存在しない場合は無視）
       const afFilters = [];
       if (options.fadeIn > 0) afFilters.push(`afade=t=in:st=0:d=${options.fadeIn}`);
       if (options.fadeOut > 0) afFilters.push(`afade=t=out:st=${Math.max(0, duration - options.fadeOut).toFixed(3)}:d=${options.fadeOut}`);
