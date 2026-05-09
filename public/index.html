@@ -385,20 +385,6 @@
     async function saveConvertedFile() {
       if (!convertedBlob) return;
 
-      if (window.showSaveFilePicker) {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: convertedFileName,
-          types: [{
-            description: 'WebM video',
-            accept: { 'video/webm': ['.webm'] },
-          }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(convertedBlob);
-        await writable.close();
-        return { usedSavePicker: true };
-      }
-
       const a = document.createElement('a');
       a.href = convertedUrl;
       a.download = convertedFileName;
@@ -481,21 +467,14 @@
       if (downloadReady) {
         try {
           submitBtn.disabled = true;
-          status.textContent = '保存ダイアログを開いています...';
+          status.textContent = 'ダウンロードを開始しています...';
           status.className = 'status';
-          const result = await saveConvertedFile();
-          status.textContent = result.usedSavePicker
-            ? '保存先を選択してダウンロードしました。'
-            : 'ブラウザの通常ダウンロードを開始しました。';
+          await saveConvertedFile();
+          status.textContent = 'ブラウザの通常ダウンロードを開始しました。';
           status.className = 'status success';
         } catch (e) {
-          if (e && e.name === 'AbortError') {
-            status.textContent = '保存をキャンセルしました。';
-            status.className = 'status';
-          } else {
-            status.textContent = e.message;
-            status.className = 'status error';
-          }
+          status.textContent = e.message;
+          status.className = 'status error';
         } finally {
           submitBtn.disabled = false;
         }
