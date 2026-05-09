@@ -1,6 +1,8 @@
 const express = require('express');
 const multer = require('multer');
 const { spawn } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
+const ffprobe = require('ffprobe-static');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -8,6 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const TEMP_DIR = path.join(__dirname, 'temp');
+const ffprobePath = ffprobe.path;
 
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
@@ -47,7 +50,7 @@ function checkRateLimit(ip) {
 
 function getVideoInfo(inputPath) {
   return new Promise((resolve, reject) => {
-    const ffprobe = spawn('ffprobe', [
+    const ffprobeProcess = spawn(ffprobePath, [
       '-v', 'quiet',
       '-print_format', 'json',
       '-show_format',
@@ -55,8 +58,8 @@ function getVideoInfo(inputPath) {
       inputPath,
     ]);
     let stdout = '';
-    ffprobe.stdout.on('data', d => { stdout += d; });
-    ffprobe.on('close', code => {
+    ffprobeProcess.stdout.on('data', d => { stdout += d; });
+    ffprobeProcess.on('close', code => {
       if (code !== 0) return reject(new Error('ffprobe failed'));
       try {
         const info = JSON.parse(stdout);
@@ -66,7 +69,7 @@ function getVideoInfo(inputPath) {
         });
       } catch (e) { reject(e); }
     });
-    ffprobe.on('error', reject);
+    ffprobeProcess.on('error', reject);
   });
 }
 
@@ -149,7 +152,7 @@ app.post('/convert', upload.single('video'), async (req, res) => {
 
     console.log(`[convert] top=${topPercent}% fadeIn=${fadeIn}s fadeOut=${fadeOut}s duration=${duration.toFixed(2)}s audio=${hasAudio}`);
 
-    const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+    const ffmpeg = spawn(ffmpegPath, ffmpegArgs);
     let stderr = '';
     ffmpeg.stderr.on('data', d => { stderr += d.toString(); });
 
@@ -172,7 +175,7 @@ app.post('/convert', upload.single('video'), async (req, res) => {
     ffmpeg.on('error', err => {
       fs.unlink(inputPath, () => {});
       console.error('[ffmpeg spawn error]', err);
-      res.status(500).json({ error: 'FFmpegが見つかりません。ffmpegをインストールしてPATHに追加してください。' });
+      res.status(500).json({ error: 'FFmpegの起動に失敗しました。' });
     });
 
   } catch (err) {
