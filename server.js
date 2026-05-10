@@ -373,11 +373,13 @@ app.post('/donate/create-session', async (req, res) => {
     return res.status(400).json({ error: '無効な金額です。' });
   }
 
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  // Railway は TLS ターミネーションをプロキシが行うため protocol が http になる場合がある
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const baseUrl = `${proto}://${req.get('host')}`;
 
   try {
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      // payment_method_types は省略して Stripe の自動選択に任せる（推奨）
       line_items: [{
         price_data: {
           currency: 'jpy',
@@ -395,8 +397,10 @@ app.post('/donate/create-session', async (req, res) => {
     });
     return res.json({ url: session.url });
   } catch (err) {
-    console.error('[stripe error]', err);
-    return res.status(500).json({ error: '決済セッションの作成に失敗しました。' });
+    console.error('[stripe error]', err.message);
+    // デバッグ用にエラーコードをクライアントに返す（機密情報は含まない）
+    const code = err.code || err.type || 'unknown';
+    return res.status(500).json({ error: `決済セッションの作成に失敗しました。(${code})` });
   }
 });
 // ─────────────────────────────────────────────────────────────────────────────
