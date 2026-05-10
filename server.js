@@ -45,7 +45,7 @@ const JOB_TTL_MS = 30 * 60 * 1000;
 
 // ─── レート制限 (30分に2本) ───────────────────────────────────────────────
 const rateLimitMap = new Map(); // ip -> [timestamp, ...]
-const RATE_LIMIT_MAX = 2;
+const RATE_LIMIT_MAX = 3;
 const RATE_LIMIT_WINDOW_MS = 30 * 60 * 1000; // 30分
 
 function checkRateLimit(ip) {
