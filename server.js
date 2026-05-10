@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const multer = require('multer');
 const { spawn } = require('child_process');
@@ -7,6 +9,11 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
+// Stripe（STRIPE_SECRET_KEY が未設定の場合は寄付機能を無効化）
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+  : null;
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const TEMP_DIR = path.join(__dirname, 'temp');
@@ -14,38 +21,42 @@ const ffprobePath = ffprobe.path;
 
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
+app.set('trust proxy', true);
+
 const upload = multer({
   dest: TEMP_DIR,
   limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const name = file.originalname.toLowerCase();
-    const allowed = ['video/mp4', 'video/quicktime'];
-    if (allowed.includes(file.mimetype) || name.endsWith('.mp4') || name.endsWith('.mov')) {
+    const allowed = ['video/mp4'];
+    if (allowed.includes(file.mimetype) || name.endsWith('.mp4')) {
       cb(null, true);
     } else {
-      cb(new Error('MP4またはMOVファイルのみ対応しています'));
+      cb(new Error('MP4ファイルのみ対応しています'));
     }
   },
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 const conversionJobs = new Map();
 const JOB_TTL_MS = 30 * 60 * 1000;
 
-// ─── レート制限 (1時間に2本) ───────────────────────────────────────────────
+// ─── レート制限 (30分に2本) ───────────────────────────────────────────────
 const rateLimitMap = new Map(); // ip -> [timestamp, ...]
 const RATE_LIMIT_MAX = 2;
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1時間
+const RATE_LIMIT_WINDOW_MS = 30 * 60 * 1000; // 30分
 
 function checkRateLimit(ip) {
   const now = Date.now();
   const timestamps = (rateLimitMap.get(ip) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
   if (timestamps.length >= RATE_LIMIT_MAX) {
-    const retryAt = new Date(timestamps[0] + RATE_LIMIT_WINDOW_MS);
-    const hh = retryAt.getHours().toString().padStart(2, '0');
-    const mm = retryAt.getMinutes().toString().padStart(2, '0');
-    return { limited: true, retryTime: `${hh}時${mm}分` };
+    const retryAfterMs = Math.max(0, (timestamps[0] + RATE_LIMIT_WINDOW_MS) - now);
+    const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
+    const retryAfterMinutes = Math.max(1, Math.ceil(retryAfterMs / (60 * 1000)));
+    rateLimitMap.set(ip, timestamps);
+    return { limited: true, retryAfterSeconds, retryMessage: `あと${retryAfterMinutes}分` };
   }
   timestamps.push(now);
   rateLimitMap.set(ip, timestamps);
@@ -302,7 +313,8 @@ app.post('/convert', upload.single('video'), async (req, res) => {
   const rl = checkRateLimit(ip);
   if (rl.limited) {
     fs.unlink(inputPath, () => {});
-    return res.status(429).json({ error: `処理制限に達しました。${rl.retryTime}以降に再実行してください。` });
+    res.set('Retry-After', String(rl.retryAfterSeconds));
+    return res.status(429).json({ error: `処理制限に達しました。${rl.retryMessage}に再実行してください。` });
   }
 
   const topPercent = Math.min(100, Math.max(0, parseFloat(req.body.topPercent ?? 30)));
@@ -347,6 +359,47 @@ app.get('/jobs/:jobId/download', (req, res) => {
   const stream = fs.createReadStream(job.outputPath);
   stream.pipe(res);
 });
+
+// ─── 寄付 (Stripe Checkout) ──────────────────────────────────────────────────
+const DONATE_ALLOWED_AMOUNTS = new Set([200, 500, 1000, 3000]);
+
+app.post('/donate/create-session', async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({ error: 'Stripe が設定されていません。' });
+  }
+
+  const amount = parseInt(req.body.amount, 10);
+  if (!DONATE_ALLOWED_AMOUNTS.has(amount)) {
+    return res.status(400).json({ error: '無効な金額です。' });
+  }
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'jpy',
+          product_data: {
+            name: 'TikGradation へのご支援',
+            description: 'サービスの継続・改善をサポートしてくださりありがとうございます！',
+          },
+          unit_amount: amount,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${baseUrl}/?donated=1`,
+      cancel_url: `${baseUrl}/`,
+    });
+    return res.json({ url: session.url });
+  } catch (err) {
+    console.error('[stripe error]', err);
+    return res.status(500).json({ error: '決済セッションの作成に失敗しました。' });
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.use((err, _req, res, _next) => {
   console.error(err);

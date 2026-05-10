@@ -198,18 +198,71 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+
+    /* ─── 寄付カード ─────────────────────────────────────── */
+    .donate-card {
+      margin-top: 24px;
+      width: 100%;
+      max-width: 560px;
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 16px;
+      padding: 28px 32px;
+      text-align: center;
+    }
+    .donate-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .donate-sub {
+      font-size: 0.82rem;
+      color: #888;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .donate-amounts {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .donate-btn {
+      padding: 10px 20px;
+      border: 1px solid #3a3a5a;
+      border-radius: 8px;
+      background: #0f0f18;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .donate-btn:hover:not(:disabled) {
+      border-color: #a78bfa;
+      background: #1a1030;
+    }
+    .donate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .donate-status {
+      margin-top: 14px;
+      font-size: 0.82rem;
+      color: #888;
+      min-height: 1.2em;
+    }
+    .donate-status.error   { color: #f87171; }
+    .donate-status.success { color: #4ade80; }
   </style>
 </head>
 <body>
   <h1>TikGradation</h1>
-  <p class="sub">MP4 / MOVを上部透過エフェクト動画に変換</p>
+  <p class="sub">MP4を上部透過エフェクト動画に変換</p>
 
   <div class="card">
     <div class="drop-zone" id="dropZone">
       <div class="icon">🎬</div>
-      <p>クリックまたはドラッグでMP4 / MOVをアップロード</p>
+      <p>クリックまたはドラッグでMP4をアップロード</p>
       <div class="file-name" id="fileName"></div>
-      <input type="file" id="fileInput" accept="video/mp4,video/quicktime,.mp4,.mov">
+      <input type="file" id="fileInput" accept="video/mp4,.mp4">
     </div>
 
     <div class="field">
@@ -278,6 +331,18 @@
       </div>
       <div class="promo-arrow">→</div>
     </a>
+  </div>
+
+  <div class="donate-card">
+    <p class="donate-title">☕ TikGradationを応援する</p>
+    <p class="donate-sub">このサービスは無料で提供しています。<br>サポートしていただけると励みになります！</p>
+    <div class="donate-amounts">
+      <button class="donate-btn" data-amount="200">¥200</button>
+      <button class="donate-btn" data-amount="500">¥500</button>
+      <button class="donate-btn" data-amount="1000">¥1,000</button>
+      <button class="donate-btn" data-amount="3000">¥3,000</button>
+    </div>
+    <div id="donateStatus" class="donate-status"></div>
   </div>
 
   <script>
@@ -545,6 +610,42 @@
         submitBtn.disabled = false;
       }
     });
+    // ─── 寄付 ────────────────────────────────────────────────────────────────
+    const donateStatus = document.getElementById('donateStatus');
+
+    document.querySelectorAll('.donate-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const amount = parseInt(btn.dataset.amount, 10);
+        const allBtns = document.querySelectorAll('.donate-btn');
+        allBtns.forEach(b => { b.disabled = true; });
+        donateStatus.textContent = '決済ページを準備しています...';
+        donateStatus.className = 'donate-status';
+
+        try {
+          const res = await fetch('/donate/create-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'エラーが発生しました');
+          window.location.href = data.url;
+        } catch (e) {
+          donateStatus.textContent = e.message;
+          donateStatus.className = 'donate-status error';
+          allBtns.forEach(b => { b.disabled = false; });
+        }
+      });
+    });
+
+    // 決済完了後リダイレクト (?donated=1) で感謝メッセージを表示
+    if (new URLSearchParams(location.search).get('donated') === '1') {
+      donateStatus.textContent = '❤️ ご支援ありがとうございます！サービス継続の励みになります。';
+      donateStatus.className = 'donate-status success';
+      setTimeout(() => donateStatus.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+      history.replaceState({}, '', '/');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
   </script>
 </body>
 </html>
