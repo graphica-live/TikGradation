@@ -200,26 +200,50 @@
     }
 
     /* ─── 寄付カード ─────────────────────────────────────── */
+    @keyframes donate-glow {
+      0%,100% { box-shadow: 0 0 18px 2px rgba(167,139,250,0.25); }
+      50%      { box-shadow: 0 0 32px 6px rgba(56,189,248,0.35); }
+    }
     .donate-card {
-      margin-top: 24px;
+      margin-top: 32px;
       width: 100%;
       max-width: 560px;
-      background: #1a1a24;
-      border: 1px solid #2a2a3a;
-      border-radius: 16px;
-      padding: 28px 32px;
+      background: linear-gradient(160deg, #1e1530 0%, #0e1a2e 100%);
+      border-radius: 18px;
+      padding: 32px 32px 28px;
       text-align: center;
+      position: relative;
+      animation: donate-glow 3s ease-in-out infinite;
+    }
+    .donate-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      padding: 2px;
+      background: linear-gradient(135deg, #a78bfa, #38bdf8, #a78bfa);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .donate-icon {
+      font-size: 2.2rem;
+      margin-bottom: 8px;
     }
     .donate-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      margin-bottom: 6px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a78bfa, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
     }
     .donate-sub {
-      font-size: 0.82rem;
-      color: #888;
-      margin-bottom: 20px;
-      line-height: 1.6;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 22px;
+      line-height: 1.7;
     }
     .donate-amounts {
       display: flex;
@@ -228,24 +252,25 @@
       flex-wrap: wrap;
     }
     .donate-btn {
-      padding: 10px 20px;
-      border: 1px solid #3a3a5a;
-      border-radius: 8px;
+      padding: 11px 22px;
+      border: 1.5px solid #3a3a5a;
+      border-radius: 10px;
       background: #0f0f18;
       color: #e0e0e0;
-      font-size: 0.9rem;
-      font-weight: 600;
+      font-size: 1rem;
+      font-weight: 700;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.15s;
     }
     .donate-btn:hover:not(:disabled) {
       border-color: #a78bfa;
       background: #1a1030;
+      transform: translateY(-2px);
     }
     .donate-btn.selected {
       border-color: #a78bfa;
-      background: #1a1030;
-      color: #a78bfa;
+      background: linear-gradient(135deg, #2a1a4a, #0a2040);
+      color: #c4b5fd;
     }
     .donate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .donate-custom-wrap {
@@ -272,17 +297,18 @@
     .donate-custom-input:focus { border-color: #a78bfa; }
     .donate-custom-input.selected { border-color: #a78bfa; }
     .donate-go-btn {
-      padding: 9px 18px;
+      padding: 10px 22px;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       background: linear-gradient(135deg, #a78bfa, #38bdf8);
       color: #fff;
-      font-size: 0.9rem;
+      font-size: 1rem;
       font-weight: 700;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, transform 0.15s;
     }
-    .donate-go-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .donate-go-btn:not(:disabled):hover { transform: translateY(-2px); opacity: 0.9; }
+    .donate-go-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .donate-status {
       margin-top: 14px;
       font-size: 0.82rem;
@@ -374,8 +400,9 @@
   </div>
 
   <div class="donate-card">
-    <p class="donate-title">☕ TikGradationを応援する</p>
-    <p class="donate-sub">このサービスは無料で提供しています。<br>サポートしていただけると励みになります！</p>
+    <div class="donate-icon">☕</div>
+    <p class="donate-title">TikGradationを応援する</p>
+    <p class="donate-sub">このツールは完全無料で提供しています。<br>気に入っていただけたら、ぜひご支援をお願いします！</p>
     <div class="donate-amounts">
       <button class="donate-btn" data-amount="500">¥500</button>
       <button class="donate-btn" data-amount="1000">¥1,000</button>
