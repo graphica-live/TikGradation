@@ -56,7 +56,7 @@ function checkRateLimit(ip) {
     const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
     const retryAfterMinutes = Math.max(1, Math.ceil(retryAfterMs / (60 * 1000)));
     rateLimitMap.set(ip, timestamps);
-    return { limited: true, retryAfterSeconds, retryMessage: `あと${retryAfterMinutes}分` };
+    return { limited: true, retryAfterSeconds, retryMessage: `あと${retryAfterMinutes}分後` };
   }
   timestamps.push(now);
   rateLimitMap.set(ip, timestamps);
