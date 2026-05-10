@@ -242,7 +242,47 @@
       border-color: #a78bfa;
       background: #1a1030;
     }
+    .donate-btn.selected {
+      border-color: #a78bfa;
+      background: #1a1030;
+      color: #a78bfa;
+    }
     .donate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .donate-custom-wrap {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+    }
+    .donate-custom-label { font-size: 0.9rem; color: #aaa; }
+    .donate-custom-input {
+      width: 110px;
+      padding: 9px 12px;
+      border: 1px solid #3a3a5a;
+      border-radius: 8px;
+      background: #0f0f18;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-align: right;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .donate-custom-input:focus { border-color: #a78bfa; }
+    .donate-custom-input.selected { border-color: #a78bfa; }
+    .donate-go-btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #a78bfa, #38bdf8);
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .donate-go-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .donate-status {
       margin-top: 14px;
       font-size: 0.82rem;
@@ -337,10 +377,14 @@
     <p class="donate-title">☕ TikGradationを応援する</p>
     <p class="donate-sub">このサービスは無料で提供しています。<br>サポートしていただけると励みになります！</p>
     <div class="donate-amounts">
-      <button class="donate-btn" data-amount="200">¥200</button>
       <button class="donate-btn" data-amount="500">¥500</button>
       <button class="donate-btn" data-amount="1000">¥1,000</button>
       <button class="donate-btn" data-amount="3000">¥3,000</button>
+    </div>
+    <div class="donate-custom-wrap">
+      <span class="donate-custom-label">¥</span>
+      <input type="number" id="donateCustom" class="donate-custom-input" min="50" max="100000" placeholder="金額を入力">
+      <button id="donateGoBtn" class="donate-go-btn" disabled>支援する</button>
     </div>
     <div id="donateStatus" class="donate-status"></div>
   </div>
@@ -611,31 +655,66 @@
       }
     });
     // ─── 寄付 ────────────────────────────────────────────────────────────────
-    const donateStatus = document.getElementById('donateStatus');
+    const donateStatus  = document.getElementById('donateStatus');
+    const donateCustom  = document.getElementById('donateCustom');
+    const donateGoBtn   = document.getElementById('donateGoBtn');
+    const donateBtns    = document.querySelectorAll('.donate-btn');
 
-    document.querySelectorAll('.donate-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const amount = parseInt(btn.dataset.amount, 10);
-        const allBtns = document.querySelectorAll('.donate-btn');
-        allBtns.forEach(b => { b.disabled = true; });
-        donateStatus.textContent = '決済ページを準備しています...';
-        donateStatus.className = 'donate-status';
+    let selectedAmount = null;
 
-        try {
-          const res = await fetch('/donate/create-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'エラーが発生しました');
-          window.location.href = data.url;
-        } catch (e) {
-          donateStatus.textContent = e.message;
-          donateStatus.className = 'donate-status error';
-          allBtns.forEach(b => { b.disabled = false; });
-        }
+    function setDonateLoading(loading) {
+      donateBtns.forEach(b => { b.disabled = loading; });
+      donateGoBtn.disabled = loading || !getAmount();
+      donateCustom.disabled = loading;
+    }
+
+    function getAmount() {
+      return selectedAmount || (donateCustom.value ? parseInt(donateCustom.value, 10) : null);
+    }
+
+    donateBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        donateBtns.forEach(b => b.classList.remove('selected'));
+        donateCustom.classList.remove('selected');
+        donateCustom.value = '';
+        btn.classList.add('selected');
+        selectedAmount = parseInt(btn.dataset.amount, 10);
+        donateGoBtn.disabled = false;
       });
+    });
+
+    donateCustom.addEventListener('input', () => {
+      donateBtns.forEach(b => b.classList.remove('selected'));
+      selectedAmount = null;
+      const v = parseInt(donateCustom.value, 10);
+      const valid = !isNaN(v) && v >= 50 && v <= 100000;
+      donateCustom.classList.toggle('selected', valid);
+      donateGoBtn.disabled = !valid;
+    });
+
+    async function startDonation(amount) {
+      setDonateLoading(true);
+      donateStatus.textContent = '決済ページを準備しています...';
+      donateStatus.className = 'donate-status';
+      try {
+        const res = await fetch('/donate/create-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'エラーが発生しました');
+        window.location.href = data.url;
+      } catch (e) {
+        donateStatus.textContent = e.message;
+        donateStatus.className = 'donate-status error';
+        setDonateLoading(false);
+      }
+    }
+
+    donateGoBtn.addEventListener('click', () => {
+      const amount = getAmount();
+      if (amount) startDonation(amount);
     });
 
     // 決済完了後リダイレクト (?donated=1) で感謝メッセージを表示

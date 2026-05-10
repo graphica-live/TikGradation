@@ -361,7 +361,8 @@ app.get('/jobs/:jobId/download', (req, res) => {
 });
 
 // ─── 寄付 (Stripe Checkout) ──────────────────────────────────────────────────
-const DONATE_ALLOWED_AMOUNTS = new Set([200, 500, 1000, 3000]);
+const DONATE_MIN = 50;
+const DONATE_MAX = 100000;
 
 app.post('/donate/create-session', async (req, res) => {
   if (!stripe) {
@@ -369,8 +370,8 @@ app.post('/donate/create-session', async (req, res) => {
   }
 
   const amount = parseInt(req.body.amount, 10);
-  if (!DONATE_ALLOWED_AMOUNTS.has(amount)) {
-    return res.status(400).json({ error: '無効な金額です。' });
+  if (!Number.isInteger(amount) || amount < DONATE_MIN || amount > DONATE_MAX) {
+    return res.status(400).json({ error: `金額は${DONATE_MIN}円〜${DONATE_MAX.toLocaleString()}円で入力してください。` });
   }
 
   // Railway は TLS ターミネーションをプロキシが行うため protocol が http になる場合がある
