@@ -67,6 +67,14 @@
       color: #555;
       margin-top: 6px;
     }
+    .rec-note {
+      font-size: 0.75rem;
+      color: #6b7280;
+      background: rgba(167,139,250,0.08);
+      border: 1px solid rgba(167,139,250,0.2);
+      border-radius: 4px;
+      padding: 1px 6px;
+    }
 
     .notice {
       font-size: 0.82rem;
@@ -336,6 +344,7 @@
       <input type="range" id="topPercent" min="0" max="80" value="30">
       <div class="range-row">
         <span class="range-val" id="topVal">30%</span>
+        <span class="rec-note">推奨値: 30%</span>
       </div>
     </div>
 
@@ -347,6 +356,7 @@
         <input type="range" id="fadeIn" min="0" max="3" step="0.1" value="0.5">
         <div class="range-row">
           <span class="range-val" id="fadeInVal">0.5s</span>
+          <span class="rec-note">推奨値: 0.5s</span>
         </div>
       </div>
       <div class="field">
@@ -354,6 +364,7 @@
         <input type="range" id="fadeOut" min="0" max="3" step="0.1" value="0.5">
         <div class="range-row">
           <span class="range-val" id="fadeOutVal">0.5s</span>
+          <span class="rec-note">推奨値: 0.5s</span>
         </div>
       </div>
     </div>
