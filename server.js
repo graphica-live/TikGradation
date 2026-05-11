@@ -170,7 +170,7 @@ async function processConversion(jobId, inputPath, options) {
       'scale=trunc(iw/2)*2:trunc(ih/2)*2',  // 奇数ピクセル対策
       'format=yuv420p',                      // 10bit HEVC等を8bitに正規化してから alpha を追加
       'format=yuva420p',
-      `geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':alpha='${alphaExpr}'`,
+      `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}'`,
       'format=yuva420p',
     ];
     if (options.fadeIn > 0) vfFilters.push(`fade=t=in:st=0:d=${options.fadeIn}:alpha=1`);
