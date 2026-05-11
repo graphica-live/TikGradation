@@ -164,13 +164,13 @@ async function processConversion(jobId, inputPath, options) {
     const ratio = options.topPercent / 100;
     const alphaExpr = ratio === 0
       ? '255'
-      : `if(lt(Y,H*${ratio}),255*Y/(H*${ratio}),255)`;
+      : `if(lt(Y,H*${ratio}),max(0,round(255*Y/(H*${ratio}))-4),255)`;
 
     const vfFilters = [
       'scale=trunc(iw/2)*2:trunc(ih/2)*2',  // 奇数ピクセル対策
       'format=yuv420p',                      // 10bit HEVC等を8bitに正規化してから alpha を追加
       'format=yuva420p',
-      `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}'`,
+      `geq=lum='lum(X,Y)':cb='cb(X,Y)':cr='cr(X,Y)':alpha='${alphaExpr}'`,
       'format=yuva420p',
     ];
     if (options.fadeIn > 0) vfFilters.push(`fade=t=in:st=0:d=${options.fadeIn}:alpha=1`);
